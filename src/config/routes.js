@@ -30,6 +30,9 @@ routes.post('/users/username-validation', users.usernameValidation);
 routes.get('/users/me', auth, users.me);
 
 routes.put('/posts', auth, upload.single('image'),posts.create);
+routes.get('/posts', auth, posts.getAll);
+routes.post('/posts/:id/likes', auth, posts.like);
+routes.delete('/posts/:id/likes/:userId', auth, posts.unlike);
 
 
 
