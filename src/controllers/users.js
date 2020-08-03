@@ -1,16 +1,40 @@
 const md5 = require('md5');
 const User = require('../models/user');
+const Post = require('../models/post');
 const config = require('../config/env/index');
+const ObjectId = require('mongodb').ObjectId;
+const jwt = require('jsonwebtoken');
 const ERROR_DUPLICATE_VALUE=11000;
 const DURATION_60D=60*60*24*60*1000;
 
 
 class Users {
 
-    getAll(req,res) {
-        User.find()
-            .then(users => res.json(users))
-            .catch(err => res.status(500).json(err));
+    async getAll(req,res) {
+        const regex = new RegExp(req.query.username || '', 'i');
+        try {
+            const users = await User
+                .find({username: regex})
+                .select(['username', 'avatar', 'bio'])
+                .limit(10)
+            res.json(users)
+        } catch (err) {
+            res.status(500).json(err)
+        }
+    }
+
+    async getUser(req,res){
+        try {
+            const user = await User
+                .findById(req.params.id)
+                .select(['username', 'bio', 'avatar', 'createdAt']);
+            if (!user){
+                res.status(401)
+            }
+            res.json(user)
+        } catch (err) {
+            res.status(500).json(err)
+        }
     }
 
     async create(req,res) {
@@ -40,7 +64,9 @@ class Users {
                 return;
             } 
             // success
-            res.cookie(config.cookieName, user._id, { maxAge: DURATION_60D }); //inject cookie
+            const token = jwt.sign({id: user._id}, config.secret)
+            res.cookie(config.cookieName, token, { maxAge: DURATION_60D }); //inject cookie
+            // res.cookie(config.cookieName, user._id, { maxAge: DURATION_60D }); //inject cookie
             res.json(user).send();
         } catch(err) {
             res.sendStatus(500)
@@ -50,9 +76,7 @@ class Users {
 
     async usernameValidation(req,res) {
 
-        const credentials= req.body
-        console.log('credentials are:');
-        console.log(credentials);
+        const credentials= req.body;
 
         try {
             const user= await User.findOne({
@@ -71,6 +95,37 @@ class Users {
 
     }
 
+    async getUserPosts(req,res) {
+        // const userId = ObjectId(req.params.id);
+        try{
+            const posts = await Post.find({
+                user: req.params.id
+            })
+                .populate('user', ['avatar','username' ])
+                .sort( { createdAt : req.query.sort } )
+            res.json(posts);
+        } catch (err) {
+            res.sendStatus(400);
+        }
+
+    }
+
+    async edit(req,res) {
+        const newUserData= req.body;
+        User.findOneAndUpdate(
+            { _id: req.params.id },
+            {   avatar: req.file.filename,
+                bio: req.body.bio
+            },
+            {new: true},
+            function (err, user) {
+                if (err) {
+                    res.status(401).send(err);
+                }
+                res.status(200).send(user);
+            });
+
+    }
 
 
     me(req,res){     
